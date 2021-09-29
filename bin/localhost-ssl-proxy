@@ -1,0 +1,60 @@
+#!/usr/bin/env node
+
+'use strict';
+
+const fs = require("fs");
+const proxy = require("http-proxy");
+const chalk = require("chalk");
+const devcert = require("devcert");
+const { 
+  exists,
+  absolutePath,
+  program
+} = require("../lib/commandline");
+
+program.parse(process.argv);
+
+const opts = program.opts();
+if(opts.config && exists(opts.config)) {
+  opts.config = fs.readFileSync(absolutePath(opts.config),'utf8');
+}else{
+  delete opts.config;
+}
+
+const config = opts.config || {"localhost-ssl-proxy":opts};
+Object.keys(config).forEach(function(name) {
+  const options = config[name];
+  const hostname = options.hostname || opts.hostname;
+  const port = options.port || opts.port;
+  const targetPort = options.targetPort || opts.targetPort;
+  const useSSL = options.useSSL || opts.useSSL;
+
+  const proxyConfig = {
+    xfwd: true,
+    ws: true,
+    target: {
+      host: hostname,
+      port: port
+    }
+  };
+
+  const createProxyServer = () =>{
+    proxy.createServer(proxyConfig).on("error", function(e) {
+      console.error(chalk.red(`Request failed to ${name}: ${chalk.bold(e.code)}`));
+    }).listen(targetPort);
+    console.log(chalk.green(`Started ${chalk.bold(name)} : http://${hostname}:${port} → https://localhost:${targetPort} `));  
+  }
+
+  if(useSSL){
+     devcert.certificateFor(['localhost'])
+     .then(ssl =>{
+      proxyConfig.ssl = ssl;
+      createProxyServer()
+     },err =>{
+      createProxyServer()
+     })
+  }else{
+    createProxyServer();
+  }
+
+ });
