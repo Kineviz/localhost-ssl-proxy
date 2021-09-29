@@ -2,7 +2,7 @@
   "name": "localhost-ssl-proxy",
   "version": "1.0.0",
   "author": "Sean Li <sean@kineviz.com>",
-  "description": "Let https://localhost proxy simply.",
+  "description": "Let proxy to https localhost simply.",
   "repository": {
     "type": "git",
     "url": "https://github.com/Kineviz/localhost-ssl-proxy.git"

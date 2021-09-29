@@ -1,12 +1,18 @@
 ## localhost-ssl-proxy
 
 
-Let https://localhost:9443 proxy simply.
+Let proxy to https localhost simply.
 
 ### Install
 
 ```sh
 npm install -g localhost-ssl-proxy
+```
+
+or 
+
+```sh
+yarn global add localhost-ssl-proxy
 ```
 
 ### Run (proxy localhost)
