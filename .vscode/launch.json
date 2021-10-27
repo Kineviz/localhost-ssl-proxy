@@ -5,13 +5,30 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "type": "pwa-node",
+            "name": "Launch http 9000",
+            "program": "${workspaceFolder}/bin/localhost-ssl-proxy",
             "request": "launch",
-            "name": "Launch Program",
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "program": "${file}"
-        }
+            "args": [
+                 " -s=false ",
+                 " --port=9000 "
+            ],
+            "type": "pwa-node"
+        },
+        {
+            "name": "Launch https 9000",
+            "program": "${workspaceFolder}/bin/localhost-ssl-proxy",
+            "request": "launch",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "args": [
+                 " -s true ",
+                 " -p 9000 "
+            ],
+            "type": "pwa-node"
+        },
     ]
 }
