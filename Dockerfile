@@ -5,13 +5,13 @@ LABEL maintainer="Sean <sean@kineviz.com>"
 #app directory
 WORKDIR /data
 
-# Install  localhost-ssl-proxy
-RUN npm install localhost-ssl-proxy -g
-
 RUN mkdir -p /data
 VOLUME /data
 
-EXPOSE 8008
+# Install  localhost-ssl-proxy
+RUN npm install localhost-ssl-proxy -g
+
+EXPOSE 9443
 
 #For Release 
 ENV NODE_ENV=production
