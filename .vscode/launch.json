@@ -12,8 +12,8 @@
                 "<node_internals>/**"
             ],
             "args": [
-                 " -s=false ",
-                 " --port=9000 "
+                 "-s=false",
+                 "--port=9000"
             ],
             "type": "pwa-node"
         },
@@ -25,8 +25,9 @@
                 "<node_internals>/**"
             ],
             "args": [
-                 " -s true ",
-                 " -p 9000 "
+                 "-s=true",
+                 "-p=9000",
+                 "--useCORS=false"
             ],
             "type": "pwa-node"
         },

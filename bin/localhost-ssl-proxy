@@ -1,138 +1,184 @@
 #!/usr/bin/env node
 
-'use strict';
+"use strict";
 
 const fs = require("fs");
 const httpProxy = require("http-proxy");
 const chalk = require("chalk");
 const devcert = require("devcert");
 
-const { 
-  exists,
-  absolutePath,
-  program
-} = require("../lib/commandline");
+const { exists, absolutePath, program } = require("../lib/commandline");
 
 program.parse(process.argv);
 
 const opts = program.opts();
-if(opts.config && exists(opts.config)) {
-  opts.config = fs.readFileSync(absolutePath(opts.config),'utf8');
-}else{
+if (opts.config && exists(opts.config)) {
+  opts.config = fs.readFileSync(absolutePath(opts.config), "utf8");
+} else {
   delete opts.config;
 }
 
-const enableCors = function(req, res) {
-  if (req.headers['access-control-request-method']) {
-    res.setHeader('access-control-allow-methods', req.headers['access-control-request-method']);
+const enableCors = function (req, res) {
+  if (req.headers["access-control-request-method"]) {
+    res.setHeader(
+      "access-control-allow-methods",
+      req.headers["access-control-request-method"]
+    );
   }
 
-  if (req.headers['access-control-request-headers']) {
-    res.setHeader('access-control-allow-headers', req.headers['access-control-request-headers']);
+  if (req.headers["access-control-request-headers"]) {
+    res.setHeader(
+      "access-control-allow-headers",
+      req.headers["access-control-request-headers"]
+    );
   }
 
   if (req.headers.origin) {
-		res.setHeader('access-control-allow-origin', req.headers.origin);
-	}else{
-    res.setHeader('access-control-allow-origin', "*");
+    res.setHeader("access-control-allow-origin", req.headers.origin);
+  } else {
+    res.setHeader("access-control-allow-origin", "*");
   }
 
-  res.setHeader('access-control-allow-credentials', 'true');
+  res.setHeader("access-control-allow-credentials", "true");
 };
 
+function getBool(val) {
+  if (String(val).toLowerCase() === "true") {
+    return true;
+  }
+  if (String(val).toLowerCase() === "false") {
+    return false;
+  }
+  return val;
+}
 
+function getOption(val) {
+  let tmpVal = typeof(val) ==='string' ?  val.trim() : val;
+  if ((/^=/ig).test(tmpVal)) {
+    return tmpVal.replace(/^=/ig, "");
+  }
+  return tmpVal;
+}
 
-const config = opts.config || {"localhost-ssl-proxy":opts};
-Object.keys(config).forEach(function(name) {
+const config = opts.config || { "localhost-ssl-proxy": opts };
+Object.keys(config).forEach(function (name) {
   const options = config[name];
-  const hostname = options.hostname || opts.hostname;
-  const port = Number(options.port || opts.port);
-  const targetPort = Number(options.targetPort || opts.targetPort);
-  let  useSSL =  options.useSSL !== undefined ?  options.useSSL : opts.useSSL;
-  useSSL = typeof(useSSL) === 'string' ? (String(useSSL).toLowerCase() === 'true' ? true: false) : useSSL;
+  const hostname = getOption(options.hostname || opts.hostname);
+  const port = Number(getOption(options.port || opts.port));
+  const targetPort = Number(getOption(options.targetPort || opts.targetPort));
+  let useSSL = getOption(options.useSSL !== undefined ? options.useSSL : opts.useSSL);
+  useSSL = getBool(useSSL);
 
-  let  useCORS =  options.useCORS !== undefined ?  options.useCORS : opts.useCORS;
-  useCORS = typeof(useCORS) === 'string' ? (String(useCORS).toLowerCase() === 'true' ? true: false) : useCORS;
+  let useCORS = getOption(options.useCORS !== undefined ? options.useCORS : opts.useCORS);
+  useCORS = getBool(useCORS);
+
+  let sessionName =  getOption(options.sessionName || opts.sessionName);
 
   const proxyConfig = {
     xfwd: true,
     ws: true,
     target: {
       host: hostname,
-      port: port
-    }
+      port: port,
+    },
+    //custom options
+    sessionName,
+    useSSL,
+    useCORS,
+    name
   };
 
-  if(useCORS){
+  if (useCORS) {
     //remove cookie domain and path
     proxyConfig.cookieDomainRewrite = {
-      "*": ""
-    }
+      "*": "",
+    };
     proxyConfig.cookiePathRewrite = {
-      "*": ""
-    }
+      "*": "",
+    };
     // proxyConfig.headers = {
 
     // }
   }
 
-  const createProxyServer = (serverOptions) =>{
-
+  const createProxyServer = (serverOptions) => {
     const proxy = new httpProxy.createProxyServer(serverOptions);
 
-    proxy.on("error", function(e) {
-      console.error(chalk.red(`Request failed to ${serverOptions.target.host}:${serverOptions.target.port} : ${chalk.bold(e.code)}`));
-    })
+    proxy.on("error", function (e) {
+      console.error(
+        chalk.red(
+          `Request failed to ${serverOptions.target.host}:${
+            serverOptions.target.port
+          } : ${chalk.bold(e.code)}`
+        )
+      );
+    });
     //set header for CORS
-    let proxyCookie = null ;
-    proxy.on("proxyRes", function(proxyRes, req, res) {
-      enableCors(req, res);
-      const sc = proxyRes.headers['set-cookie'] || [];
-      const raw = sc.filter(s => s.startsWith('nsid'));
-      if(raw.length) {
-        proxyCookie = raw[0].split(';')[0];
+    let proxyCookiesMap ={};
+    proxy.on("proxyRes", function (proxyRes, req, res) {
+      serverOptions.useCORS && enableCors(req, res);
+      const sc = proxyRes.headers["set-cookie"] || [];
+      const cookiesRaw = !serverOptions.sessionName ? sc : sc.filter((s) => s.startsWith(serverOptions.sessionName));
+      if (cookiesRaw.length > 0) {
+        cookiesRaw.forEach((cookie) => {
+          const cookieName = cookie.split(";")[0].split("=")[0];
+          proxyCookiesMap[cookieName] = cookie;
+        })
+       }
+    });
+
+    proxy.on("proxyReq", function (proxyReq, req, res, options) {
+      if (Object.keys(proxyCookiesMap).length > 0) {
+          proxyReq.setHeader("Cookie", Object.values(proxyCookiesMap));
       }
     });
 
-    proxy.on('proxyReq', function(proxyReq, req, res, options) {
-     if(proxyCookie) {
-        proxyReq.setHeader('Cookie', proxyCookie);
-      }
-    });
-    
     const handleProxyWeb = function (req, res) {
-      if (req.method === 'OPTIONS') {
-        enableCors(req, res);
+      if (req.method === "OPTIONS") {
+        serverOptions.useCORS && enableCors(req, res);
         res.writeHead(200);
         res.end();
         return;
       }
       proxy.web(req, res);
     };
- 
-    const proxyServer = proxyConfig.ssl ? require('https').createServer(proxyConfig.ssl, handleProxyWeb) : require('http').createServer(handleProxyWeb);
 
-    proxyServer.on('upgrade', function (req, socket, head) {
+    let proxyServer = null;
+    if (proxyConfig.ssl) {
+      proxyServer = require("https").createServer(
+        proxyConfig.ssl,
+        handleProxyWeb
+      );
+    } else {
+      proxyServer = require("http").createServer(handleProxyWeb);
+    }
+
+    proxyServer.on("upgrade", function (req, socket, head) {
       proxy.ws(req, socket, head);
     });
-    
+
     proxyServer.listen(targetPort);
-    
-    console.log(chalk.green(`Started ${chalk.bold(name)} : http://${hostname}:${port} → http${serverOptions.ssl ? 's' : ''}://localhost:${targetPort} `));  
-    console.log(chalk.red('\nHit CTRL-C to stop the server \n'));
-  }
 
+    const targetProtocol =  serverOptions.ssl ? "https" : "http";
+    const isCors = serverOptions.useCORS ? "enable CORS" :"disable CORS";
 
-  if(useSSL){
-     devcert.certificateFor(['localhost'])
-     .then(ssl =>{
-      proxyConfig.ssl = ssl;
-      createProxyServer(proxyConfig)
-     },err =>{
-      createProxyServer(proxyConfig)
-     })
-  }else{
+    console.log(chalk.green(`Started ${chalk.bold(serverOptions.name)} (${isCors})`));
+    console.log(chalk.yellow(`http://${hostname}:${port} → ${targetProtocol}://localhost:${targetPort}`));
+
+    console.log(chalk.red("\nHit CTRL-C to stop the proxy server \n"));
+  };
+
+  if (useSSL) {
+    devcert.certificateFor(["localhost"]).then(
+      (ssl) => {
+        proxyConfig.ssl = ssl;
+        createProxyServer(proxyConfig);
+      },
+      (err) => {
+        createProxyServer(proxyConfig);
+      }
+    );
+  } else {
     createProxyServer(proxyConfig);
   }
-
- });
+});

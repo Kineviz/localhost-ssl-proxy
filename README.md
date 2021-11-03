@@ -19,7 +19,7 @@ yarn global add localhost-ssl-proxy
 
 To start a proxy from port `http://localhost:8008` to `https://localhost:9443` run:
 ```sh
-localhost-ssl-proxy --port=8008  
+localhost-ssl-proxy --port 8008  
 ```
 
 Start your web server on the target port (`9443` in the example) and navigate to `https://localhost:9443` ([http://localhost:8008](http://localhost:8008) in the example).
