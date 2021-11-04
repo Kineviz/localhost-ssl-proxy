@@ -1,6 +1,6 @@
 {
   "name": "localhost-ssl-proxy",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "author": "Sean Li <sean@kineviz.com>",
   "description": "Let proxy to https localhost simply.",
   "repository": {

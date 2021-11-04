@@ -31,5 +31,17 @@
             ],
             "type": "pwa-node"
         },
+        {
+            "name": "Launch With Config",
+            "program": "${workspaceFolder}/bin/localhost-ssl-proxy",
+            "request": "launch",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "args": [
+                 "--config=config.json",
+            ],
+            "type": "pwa-node"
+        },
     ]
 }

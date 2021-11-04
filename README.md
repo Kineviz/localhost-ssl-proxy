@@ -66,6 +66,27 @@ And run the proxy with the configuration file:
 localhost-ssl-proxy --config config.json
 ```
 
+### Docker
+
+> Use docker must use hostname (IP or docker.internal.host )
+
+```
+docker run -d -it \
+--restart always  \
+--name localhost-ssl-proxy \
+-p 9443:9443 \
+kineviz/localhost-ssl-proxy:latest \
+-p 8008 -h docker.internal.host  
+```
+
+docker-compose refer ./docker-compose-demo
+```
+cd docker-compose-demo \
+&& \
+docker-compose up -d
+
+```
+then copy the ./docker-compose-demo/nebula_http_cors_request_demo.js to **"chrome develop tool"** > **"console"**, then enter to run.
 ### Thanks
  
 

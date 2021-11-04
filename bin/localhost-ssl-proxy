@@ -12,8 +12,14 @@ const { exists, absolutePath, program } = require("../lib/commandline");
 program.parse(process.argv);
 
 const opts = program.opts();
+
 if (opts.config && exists(opts.config)) {
-  opts.config = fs.readFileSync(absolutePath(opts.config), "utf8");
+  try {
+    opts.config = JSON.parse(fs.readFileSync(absolutePath(opts.config), "utf8"));
+  } catch (error) {
+    console.log(chalk.red(error));
+    process.exit(1);
+  }
 } else {
   delete opts.config;
 }
@@ -61,7 +67,8 @@ function getOption(val) {
 }
 
 const config = opts.config || { "localhost-ssl-proxy": opts };
-Object.keys(config).forEach(function (name) {
+const configItems = Object.keys(config);
+configItems.forEach(function (name, index) {
   const options = config[name];
   const hostname = getOption(options.hostname || opts.hostname);
   const port = Number(getOption(options.port || opts.port));
@@ -85,7 +92,7 @@ Object.keys(config).forEach(function (name) {
     sessionName,
     useSSL,
     useCORS,
-    name
+    name,
   };
 
   if (useCORS) {
@@ -162,7 +169,7 @@ Object.keys(config).forEach(function (name) {
     const targetProtocol =  serverOptions.ssl ? "https" : "http";
     const isCors = serverOptions.useCORS ? "enable CORS" :"disable CORS";
 
-    console.log(chalk.green(`Started ${chalk.bold(serverOptions.name)} (${isCors})`));
+    console.log(chalk.green(`Started <${chalk.bold(serverOptions.name)}> (${isCors})`));
     console.log(chalk.yellow(`http://${hostname}:${port} → ${targetProtocol}://localhost:${targetPort}`));
 
     console.log(chalk.red("\nHit CTRL-C to stop the proxy server \n"));
