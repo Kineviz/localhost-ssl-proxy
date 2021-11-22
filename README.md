@@ -27,18 +27,23 @@ Start your web server on the target port (`9443` in the example) and navigate to
 
 ### Available Options:
 
-`-h` or `--hostname` Proxy hostname (default localhost)
+`-h` or `--hostname`   Proxy hostname (default localhost)
 
-`-p` or `--port` Proxy port (default 80)
+`-p` or `--port`       Proxy port (default 80)
 
 `-t` or `--targetPort` Proxy to localhost port (default 9443)
 
-`-s` or `--useSSL` Enable https (default true)
+`-s` or `--useSSL`     Enable https (default true)
 
-`-v` or `--version` Print version and exit
+`-v` or `--version`    Print version and exit
 
-`-c` or `--config` Use config.json  
+`-c` or `--config`     Use config.json  
 
+`--proxySSL`           Proxy host enable SSL (Default false), default is proxy http/ws
+
+`--useCORS`            Enable CORS (Default true)
+
+`--sessionName`        Proxy the sessionName(It is in cookies)
 
 ### Advanced
 
@@ -57,6 +62,19 @@ Example config:
     "hostname": "demo.local",
     "port": 3001,
     "targetPort": 4002
+  },
+    "proxy to neo4j bolt": {
+    "useSSL":false,
+    "hostname": "demo.local",
+    "port": 7687,
+    "targetPort": 4003
+  },
+    "proxy to neo4j bolt+s": {
+    "useSSL":true,
+    "hostname": "demo.local",
+    "proxySSL":true,
+    "port": 7687,
+    "targetPort": 4003
   }
 }
 ```
@@ -79,6 +97,26 @@ kineviz/localhost-ssl-proxy:latest \
 -p 8008 -h docker.internal.host  
 ```
 
+### Examples
+
+#### Neo4j bolt to bolt+s
+bolt(192.168.1.101:7687) => bolt+s (localhost:9443)
+```
+localhost-ssl-proxy \
+--port=7687 \
+--hostname=192.168.1.101 \
+```
+
+#### Neo4j bolt+s to bolt+s
+bolt+s(5e1a823de94a71e6655ba1260624d773.neo4jsandbox.com:7687) => bolt+s (localhost:9443)
+```
+localhost-ssl-proxy \
+--port=7687 \
+--hostname=5e1a823de94a71e6655ba1260624d773.neo4jsandbox.com \
+--proxySSL=true
+```
+#### Nebula graph databse
+
 docker-compose refer ./docker-compose-demo
 ```
 cd docker-compose-demo \
@@ -87,6 +125,7 @@ docker-compose up -d
 
 ```
 then copy the ./docker-compose-demo/nebula_http_cors_request_demo.js to **"chrome develop tool"** > **"console"**, then enter to run.
+
 ### Thanks
  
 

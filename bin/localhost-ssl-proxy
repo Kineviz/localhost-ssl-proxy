@@ -69,31 +69,39 @@ function getOption(val) {
 const config = opts.config || { "localhost-ssl-proxy": opts };
 const configItems = Object.keys(config);
 configItems.forEach(function (name, index) {
-  const options = config[name];
+  const options = config[name] || {};
   const hostname = getOption(options.hostname || opts.hostname);
   const port = Number(getOption(options.port || opts.port));
   const targetPort = Number(getOption(options.targetPort || opts.targetPort));
-  let useSSL = getOption(options.useSSL !== undefined ? options.useSSL : opts.useSSL);
-  useSSL = getBool(useSSL);
+  const getBoolProp = (prop) => getBool(options[prop] !== undefined ? options[prop] : opts[prop]);
 
-  let useCORS = getOption(options.useCORS !== undefined ? options.useCORS : opts.useCORS);
-  useCORS = getBool(useCORS);
+  let useSSL = getBoolProp("useSSL");
+  let useCORS = getBoolProp("useCORS");
+  let proxySSL = getBoolProp("proxySSL") || port === 443;
 
   let sessionName =  getOption(options.sessionName || opts.sessionName);
 
   const proxyConfig = {
     xfwd: true,
     ws: true,
+    changeOrigin: true,
     target: {
       host: hostname,
       port: port,
+      protocol: proxySSL ? "https:" : "http:"
     },
     //custom options
     sessionName,
     useSSL,
     useCORS,
     name,
+    proxySSL,
   };
+
+  if(proxySSL){
+    proxyConfig.rejectUnauthorized =  false ;
+    proxyConfig.secure = false;
+   }
 
   if (useCORS) {
     //remove cookie domain and path
@@ -124,10 +132,10 @@ configItems.forEach(function (name, index) {
     let proxyCookiesMap ={};
     proxy.on("proxyRes", function (proxyRes, req, res) {
       serverOptions.useCORS && enableCors(req, res);
-      const sc = proxyRes.headers["set-cookie"] || [];
+      const sc = (proxyRes.headers["set-cookie"] || []);
       const cookiesRaw = !serverOptions.sessionName ? sc : sc.filter((s) => s.startsWith(serverOptions.sessionName));
       if (cookiesRaw.length > 0) {
-        cookiesRaw.forEach((cookie) => {
+        cookiesRaw.filter(s => typeof(s) === 'string').forEach((cookie) => {
           const cookieName = cookie.split(";")[0].split("=")[0];
           proxyCookiesMap[cookieName] = cookie;
         })
@@ -147,7 +155,7 @@ configItems.forEach(function (name, index) {
         res.end();
         return;
       }
-      proxy.web(req, res);
+        proxy.web(req, res);
     };
 
     let proxyServer = null;
@@ -160,17 +168,19 @@ configItems.forEach(function (name, index) {
       proxyServer = require("http").createServer(handleProxyWeb);
     }
 
-    proxyServer.on("upgrade", function (req, socket, head) {
+
+    proxyServer.on("upgrade", function (req, socket, head) { 
       proxy.ws(req, socket, head);
     });
 
     proxyServer.listen(targetPort);
 
-    const targetProtocol =  serverOptions.ssl ? "https" : "http";
+    const proxyProtocol = `${serverOptions.onlyWS ? "ws" : "http"}${serverOptions.proxySSL ? "s" : ""}`;
+    const targetProtocol = `${serverOptions.onlyWS ? "ws" : "http"}${serverOptions.ssl ? "s" : ""}`;
     const isCors = serverOptions.useCORS ? "enable CORS" :"disable CORS";
 
     console.log(chalk.green(`Started <${chalk.bold(serverOptions.name)}> (${isCors})`));
-    console.log(chalk.yellow(`http://${hostname}:${port} → ${targetProtocol}://localhost:${targetPort}`));
+    console.log(chalk.yellow(`${proxyProtocol}://${hostname}:${port} → ${targetProtocol}://localhost:${targetPort}`));
 
     console.log(chalk.red("\nHit CTRL-C to stop the proxy server \n"));
   };

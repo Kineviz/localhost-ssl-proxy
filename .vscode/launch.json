@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Launch http 9000",
+            "name": "Launch http 9900",
             "program": "${workspaceFolder}/bin/localhost-ssl-proxy",
             "request": "launch",
             "skipFiles": [
@@ -13,12 +13,12 @@
             ],
             "args": [
                  "-s=false",
-                 "--port=9000"
+                 "--port=9900"
             ],
             "type": "pwa-node"
         },
         {
-            "name": "Launch https 9000",
+            "name": "Launch https 9900",
             "program": "${workspaceFolder}/bin/localhost-ssl-proxy",
             "request": "launch",
             "skipFiles": [
@@ -26,7 +26,7 @@
             ],
             "args": [
                  "-s=true",
-                 "-p=9000",
+                 "-p=9900",
                  "--useCORS=false"
             ],
             "type": "pwa-node"
@@ -43,5 +43,47 @@
             ],
             "type": "pwa-node"
         },
+        {
+            "name": "Launch bolt 7887",
+            "program": "${workspaceFolder}/bin/localhost-ssl-proxy",
+            "request": "launch",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "args": [
+                 "--port=7887",
+                 "--useSSL=false"
+            ],
+            "type": "pwa-node"
+        },
+        {
+            "name": "Launch https graphxrdev",
+            "program": "${workspaceFolder}/bin/localhost-ssl-proxy",
+            "request": "launch",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "args": [
+                 "--port=443",
+                 "--hostname=graphxrdev.kineviz.com",
+                 "--proxySSL=true"
+             ],
+            "type": "pwa-node"
+        },
+        {
+            "name": "Launch bolt+s demo",
+            "program": "${workspaceFolder}/bin/localhost-ssl-proxy",
+            "request": "launch",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "args": [
+                 "--port=7687",
+                 "--hostname=5e1a823de94a71e6655ba1260624d773.neo4jsandbox.com",
+                 "--proxySSL=true"
+             ],
+            "type": "pwa-node"
+        }
+        
     ]
 }
