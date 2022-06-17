@@ -39,11 +39,16 @@ Start your web server on the target port (`9443` in the example) and navigate to
 
 `-c` or `--config`     Use config.json  
 
+`--DNS`                Self-sign SSL DNS (default localhost)
+
 `--proxySSL`           Proxy host enable SSL (Default false), default is proxy http/ws
 
 `--useCORS`            Enable CORS (Default true)
 
 `--sessionName`        Proxy the sessionName(It is in cookies)
+
+`--sessionName`        Proxy the sessionName(It is in cookies)
+
 
 ### Advanced
 

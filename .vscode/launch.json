@@ -26,8 +26,9 @@
             ],
             "args": [
                  "-s=true",
-                 "-p=9900",
-                 "--useCORS=false"
+                 "-p=9000",
+                 "--useCORS=false",
+                 "--staticDir=${workspaceFolder}/../graphXR/web/static/tempModules/site/HangZhouBankBigScreen/dist"
             ],
             "type": "pwa-node"
         },

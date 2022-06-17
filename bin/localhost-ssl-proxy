@@ -3,11 +3,16 @@
 "use strict";
 
 const fs = require("fs");
+const path = require("path");
+const express = require("express");
+const serveIndex = require("serve-index");
 const httpProxy = require("http-proxy");
+
 const chalk = require("chalk");
 const devcert = require("devcert");
 
 const { exists, absolutePath, program } = require("../lib/commandline");
+const StaticPort = 9099;
 
 program.parse(process.argv);
 
@@ -15,7 +20,9 @@ const opts = program.opts();
 
 if (opts.config && exists(opts.config)) {
   try {
-    opts.config = JSON.parse(fs.readFileSync(absolutePath(opts.config), "utf8"));
+    opts.config = JSON.parse(
+      fs.readFileSync(absolutePath(opts.config), "utf8")
+    );
   } catch (error) {
     console.log(chalk.red(error));
     process.exit(1);
@@ -59,11 +66,26 @@ function getBool(val) {
 }
 
 function getOption(val) {
-  let tmpVal = typeof(val) ==='string' ?  val.trim() : val;
-  if ((/^=/ig).test(tmpVal)) {
-    return tmpVal.replace(/^=/ig, "");
+  let tmpVal = typeof val === "string" ? val.trim() : val;
+  if (/^=/gi.test(tmpVal)) {
+    return tmpVal.replace(/^=/gi, "");
   }
   return tmpVal;
+}
+
+function handleResponse(proxyRes, res, req, bodyBuffer, staticPath) {
+  res.setHeader("content-type", proxyRes.headers["content-type"]);
+  res.writeHead(proxyRes.statusCode);
+
+  let body = bodyBuffer.toString();
+
+  body = body.replace(/src[ ]*=[ ]*(\\*["'`])\//gim, `src=\$1${staticPath}/`);
+  body = body.replace(/src[ ]*:[ ]*(\\*["'`])\//gim, `src:\$1${staticPath}/`);
+  body = body.replace(/href[ ]*=[ ]*(\\*["'`])\//gim, `href=\$1${staticPath}/`);
+  body = body.replace(/href[ ]*:[ ]*(\\*["'`])\//gim, `href:\$1${staticPath}/`);
+
+  res.write(Buffer.from(body));
+  res.end();
 }
 
 const config = opts.config || { "localhost-ssl-proxy": opts };
@@ -73,13 +95,42 @@ configItems.forEach(function (name, index) {
   const hostname = getOption(options.hostname || opts.hostname);
   const port = Number(getOption(options.port || opts.port));
   const targetPort = Number(getOption(options.targetPort || opts.targetPort));
-  const getBoolProp = (prop) => getBool(options[prop] !== undefined ? options[prop] : opts[prop]);
+  const targetHostname = getOption(options.DNS || opts.DNS || "localhost");
+  const getBoolProp = (prop) =>
+    getBool(options[prop] !== undefined ? options[prop] : opts[prop]);
 
+  let onlyWS = getBoolProp("onlyWS");
   let useSSL = getBoolProp("useSSL");
   let useCORS = getBoolProp("useCORS");
   let proxySSL = getBoolProp("proxySSL") || port === 443;
+  let staticPath = `/${getOption(options.staticPath || opts.staticPath).replace(
+    /^\//gi,
+    ""
+  )}`;
+  let staticDir = getOption(options.staticDir || opts.staticDir);
+  let expressApp = null;
 
-  let sessionName =  getOption(options.sessionName || opts.sessionName);
+  if (staticDir && staticPath) {
+    let app = express();
+    expressApp = app;
+    app.disable("x-powered-by");
+    app.set("trust proxy", 1); // trust first proxy
+    app.set("port", StaticPort);
+    app.use(function (req, res, next) {
+      enableCors(req, res);
+      next();
+    });
+
+    app.use(["/"], express.static(staticDir, { index: false }));
+    app.use(["/"], serveIndex(staticDir, { icons: true }));
+    app.listen(app.get("port"), () => {
+      console.log(
+        `The static server run on http://localhost:${app.get("port")}`
+      );
+    });
+  }
+
+  let sessionName = getOption(options.sessionName || opts.sessionName);
 
   const proxyConfig = {
     xfwd: true,
@@ -88,7 +139,7 @@ configItems.forEach(function (name, index) {
     target: {
       host: hostname,
       port: port,
-      protocol: proxySSL ? "https:" : "http:"
+      protocol: proxySSL ? "https:" : "http:",
     },
     //custom options
     sessionName,
@@ -96,12 +147,13 @@ configItems.forEach(function (name, index) {
     useCORS,
     name,
     proxySSL,
+    targetHostname,
   };
 
-  if(proxySSL){
-    proxyConfig.rejectUnauthorized =  false ;
+  if (proxySSL) {
+    proxyConfig.rejectUnauthorized = false;
     proxyConfig.secure = false;
-   }
+  }
 
   if (useCORS) {
     //remove cookie domain and path
@@ -129,22 +181,39 @@ configItems.forEach(function (name, index) {
       );
     });
     //set header for CORS
-    let proxyCookiesMap ={};
+    let proxyCookiesMap = {};
     proxy.on("proxyRes", function (proxyRes, req, res) {
       serverOptions.useCORS && enableCors(req, res);
-      const sc = (proxyRes.headers["set-cookie"] || []);
-      const cookiesRaw = !serverOptions.sessionName ? sc : sc.filter((s) => s.startsWith(serverOptions.sessionName));
+      const sc = proxyRes.headers["set-cookie"] || [];
+      const cookiesRaw = !serverOptions.sessionName
+        ? sc
+        : sc.filter((s) => s.startsWith(serverOptions.sessionName));
       if (cookiesRaw.length > 0) {
-        cookiesRaw.filter(s => typeof(s) === 'string').forEach((cookie) => {
-          const cookieName = cookie.split(";")[0].split("=")[0];
-          proxyCookiesMap[cookieName] = cookie;
-        })
-       }
+        cookiesRaw
+          .filter((s) => typeof s === "string")
+          .forEach((cookie) => {
+            const cookieName = cookie.split(";")[0].split("=")[0];
+            proxyCookiesMap[cookieName] = cookie;
+          });
+      }
+
+      if (req.staticPath === staticPath) {
+        if (!/text|html|css/gi.test(proxyRes.headers["content-type"])) {
+          return proxyRes.pipe(res);
+        }
+        let bodyBuffer = [];
+        proxyRes.on("data", function (chunk) {
+          bodyBuffer.push(chunk);
+        });
+        proxyRes.on("end", function () {
+          handleResponse(proxyRes, res, req, bodyBuffer, staticPath);
+        });
+      }
     });
 
     proxy.on("proxyReq", function (proxyReq, req, res, options) {
       if (Object.keys(proxyCookiesMap).length > 0) {
-          proxyReq.setHeader("Cookie", Object.values(proxyCookiesMap));
+        proxyReq.setHeader("Cookie", Object.values(proxyCookiesMap));
       }
     });
 
@@ -155,7 +224,20 @@ configItems.forEach(function (name, index) {
         res.end();
         return;
       }
+      if (req.url.includes(staticPath) && staticDir) {
+        req.url = req.url.replace(staticPath, "");
+        req.staticPath = staticPath;
+        proxy.web(req, res, {
+          target: {
+            host: "localhost",
+            port: StaticPort,
+            protocol: "http:",
+          },
+          selfHandleResponse: true,
+        });
+      } else {
         proxy.web(req, res);
+      }
     };
 
     let proxyServer = null;
@@ -168,30 +250,48 @@ configItems.forEach(function (name, index) {
       proxyServer = require("http").createServer(handleProxyWeb);
     }
 
-
-    proxyServer.on("upgrade", function (req, socket, head) { 
+    proxyServer.on("upgrade", function (req, socket, head) {
       proxy.ws(req, socket, head);
     });
 
     proxyServer.listen(targetPort);
 
-    const proxyProtocol = `${serverOptions.onlyWS ? "ws" : "http"}${serverOptions.proxySSL ? "s" : ""}`;
-    const targetProtocol = `${serverOptions.onlyWS ? "ws" : "http"}${serverOptions.ssl ? "s" : ""}`;
-    const isCors = serverOptions.useCORS ? "enable CORS" :"disable CORS";
+    const proxyProtocol = `${serverOptions.onlyWS ? "ws" : "http"}${
+      serverOptions.proxySSL ? "s" : ""
+    }`;
+    const targetProtocol = `${serverOptions.onlyWS ? "ws" : "http"}${
+      serverOptions.ssl ? "s" : ""
+    }`;
+    const isCors = serverOptions.useCORS ? "enable CORS" : "disable CORS";
 
-    console.log(chalk.green(`Started <${chalk.bold(serverOptions.name)}> (${isCors})`));
-    console.log(chalk.yellow(`${proxyProtocol}://${hostname}:${port} → ${targetProtocol}://localhost:${targetPort}`));
+    console.log(
+      chalk.green(`Started <${chalk.bold(serverOptions.name)}> (${isCors})`)
+    );
+    console.log(
+      chalk.yellow(
+        `${proxyProtocol}://${hostname}:${port} → ${targetProtocol}://${targetHostname}:${targetPort}`
+      )
+    );
+
+    if (staticDir && staticPath) {
+      console.log(
+        chalk.yellow(
+          `http://localhost:${StaticPort} → ${targetProtocol}://${targetHostname}:${targetPort}/${staticPath}`
+        )
+      );
+    }
 
     console.log(chalk.red("\nHit CTRL-C to stop the proxy server \n"));
   };
 
   if (useSSL) {
-    devcert.certificateFor(["localhost"]).then(
+    devcert.certificateFor([targetHostname]).then(
       (ssl) => {
         proxyConfig.ssl = ssl;
         createProxyServer(proxyConfig);
       },
       (err) => {
+        console.log(chalk.red(err.message));
         createProxyServer(proxyConfig);
       }
     );
