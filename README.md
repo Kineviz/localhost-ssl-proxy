@@ -45,11 +45,10 @@ Start your web server on the target port (`9443` in the example) and navigate to
 
 `--useCORS`            Enable CORS (Default true)
 
-`--sessionName`        Proxy the sessionName(It is in cookies)
+`--staticPath`         Static web path(Default /staticPath)
 
-`--sessionName`        Proxy the sessionName(It is in cookies)
-
-
+`--staticDir`          Static files path
+ 
 ### Advanced
 
 You can also pass a configuration file, this helps sharing setups with team members. These can contain multiple proxies which `localhost-ssl-proxy` will open concurrently.

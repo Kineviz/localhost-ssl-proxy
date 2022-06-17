@@ -1,6 +1,6 @@
 {
   "name": "localhost-ssl-proxy",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "author": "Sean Li <sean@kineviz.com>",
   "description": "Let proxy to https localhost simply.",
   "repository": {
@@ -27,11 +27,9 @@
   "dependencies": {
     "chalk": "^4.1.2",
     "commander": "^8.3.0",
-    "cors-anywhere": "github:lixuanxian/cors-anywhere#master",
     "devcert": "^1.2.0",
     "express": "^4.18.1",
     "http-proxy": "^1.18.1",
-    "http-proxy-middleware": "^2.0.6",
     "serve-index": "^1.9.1"
   },
   "devDependencies": {
