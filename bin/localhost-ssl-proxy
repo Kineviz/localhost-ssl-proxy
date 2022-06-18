@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 "use strict";
-
+const zlib = require("zlib");
 const fs = require("fs");
 const path = require("path");
 const express = require("express");
@@ -73,19 +73,60 @@ function getOption(val) {
   return tmpVal;
 }
 
-function handleResponse(proxyRes, res, req, bodyBuffer, staticPath) {
-  res.setHeader("content-type", proxyRes.headers["content-type"]);
-  res.writeHead(proxyRes.statusCode);
+function handleProxyStatic(proxyRes, res, req, staticPath) {
+  if (
+    !/text|html|javascript|css|json|xml/gi.test(
+      proxyRes.headers["content-type"]
+    )
+  ) {
+    return proxyRes.pipe(res);
+  } else if (/gzip|deflate/gi.test(proxyRes.headers["content-encoding"])) {
+    let gunzip = zlib.createUnzip();
+    let bodyTexts = [];
+    gunzip.on("data", function (data) {
+      bodyTexts.push(data.toString());
+    });
+    gunzip.on("end", function () {
+      handleResponse(proxyRes, res, req, bodyTexts.join(""), staticPath);
+    });
+    proxyRes.pipe(gunzip);
+  } else {
+    let bodyBuffer = [];
+    proxyRes.on("data", function (chunk) {
+      bodyBuffer.push(chunk);
+    });
+    proxyRes.on("end", function () {
+      handleResponse(proxyRes, res, req, bodyBuffer.toString(), staticPath);
+    });
+  }
+}
+function handleResponse(proxyRes, res, req, bodyText, staticPath) {
+  Object.keys(proxyRes.headers).forEach(function (key) {
+    res.setHeader(key, proxyRes.headers[key]);
+  });
+  // refer https://regexr.com/6o17i
+  let staticPathname = staticPath.replace(/\//gi, "");
 
-  let body = bodyBuffer.toString();
+  bodyText = bodyText.replace(
+    /(href|src|import|url)[ =:\()]+["'\`]\//gim,
+    `$&${staticPathname}/`
+  );
 
-  body = body.replace(/src[ ]*=[ ]*(\\*["'`])\//gim, `src=\$1${staticPath}/`);
-  body = body.replace(/src[ ]*:[ ]*(\\*["'`])\//gim, `src:\$1${staticPath}/`);
-  body = body.replace(/href[ ]*=[ ]*(\\*["'`])\//gim, `href=\$1${staticPath}/`);
-  body = body.replace(/href[ ]*:[ ]*(\\*["'`])\//gim, `href:\$1${staticPath}/`);
+  if (/\/socket\.io\//gi.test(req.url)) {
+    body = body.replace(
+      /url\(uri\, opts\.path \|\| \"\/socket\.io\"\)/gim,
+      `url(uri, opts.path || "/${staticPathname}/socket.io")`
+    );
+  }
 
-  res.write(Buffer.from(body));
-  res.end();
+  if (/gzip|deflate/gi.test(proxyRes.headers["content-encoding"])) {
+    res.setHeader("Content-Encoding", "gzip");
+    res.writeHead(proxyRes.statusCode || 200);
+    res.end(zlib.gzipSync(Buffer.from(bodyText)));
+  } else {
+    res.writeHead(proxyRes.statusCode || 200);
+    res.end(Buffer.from(bodyText));
+  }
 }
 
 const config = opts.config || { "localhost-ssl-proxy": opts };
@@ -108,11 +149,10 @@ configItems.forEach(function (name, index) {
     ""
   )}`;
   let staticDir = getOption(options.staticDir || opts.staticDir);
-  let expressApp = null;
+  let staticServer = getOption(options.staticServer || opts.staticServer);
 
   if (staticDir && staticPath) {
     let app = express();
-    expressApp = app;
     app.disable("x-powered-by");
     app.set("trust proxy", 1); // trust first proxy
     app.set("port", StaticPort);
@@ -148,6 +188,7 @@ configItems.forEach(function (name, index) {
     name,
     proxySSL,
     targetHostname,
+    onlyWS,
   };
 
   if (proxySSL) {
@@ -176,7 +217,7 @@ configItems.forEach(function (name, index) {
         chalk.red(
           `Request failed to ${serverOptions.target.host}:${
             serverOptions.target.port
-          } : ${chalk.bold(e.code)}`
+          } : ${chalk.bold(e.code)}  ${e.message}`
         )
       );
     });
@@ -198,16 +239,7 @@ configItems.forEach(function (name, index) {
       }
 
       if (req.staticPath === staticPath) {
-        if (!/text|html|css/gi.test(proxyRes.headers["content-type"])) {
-          return proxyRes.pipe(res);
-        }
-        let bodyBuffer = [];
-        proxyRes.on("data", function (chunk) {
-          bodyBuffer.push(chunk);
-        });
-        proxyRes.on("end", function () {
-          handleResponse(proxyRes, res, req, bodyBuffer, staticPath);
-        });
+        handleProxyStatic(proxyRes, res, req, staticPath);
       }
     });
 
@@ -215,6 +247,7 @@ configItems.forEach(function (name, index) {
       if (Object.keys(proxyCookiesMap).length > 0) {
         proxyReq.setHeader("Cookie", Object.values(proxyCookiesMap));
       }
+      // proxyReq.setHeader("Accept-Encoding" ,"*;q=1,gzip=0" );
     });
 
     const handleProxyWeb = function (req, res) {
@@ -224,15 +257,20 @@ configItems.forEach(function (name, index) {
         res.end();
         return;
       }
-      if (req.url.includes(staticPath) && staticDir) {
+
+      if (req.url.includes(staticPath) && (staticDir || staticServer)) {
         req.url = req.url.replace(staticPath, "");
         req.staticPath = staticPath;
+        delete req.headers["etag"];
+
         proxy.web(req, res, {
-          target: {
-            host: "localhost",
-            port: StaticPort,
-            protocol: "http:",
-          },
+          target: staticServer
+            ? staticServer
+            : {
+                host: "localhost",
+                port: StaticPort,
+                protocol: "http:",
+              },
           selfHandleResponse: true,
         });
       } else {
@@ -273,10 +311,16 @@ configItems.forEach(function (name, index) {
       )
     );
 
-    if (staticDir && staticPath) {
+    if (staticServer) {
       console.log(
         chalk.yellow(
-          `http://localhost:${StaticPort} → ${targetProtocol}://${targetHostname}:${targetPort}/${staticPath}`
+          `${staticServer} → ${targetProtocol}://${targetHostname}:${targetPort}${staticPath}`
+        )
+      );
+    } else if (staticDir) {
+      console.log(
+        chalk.yellow(
+          `http://localhost:${StaticPort} → ${targetProtocol}://${targetHostname}:${targetPort}${staticPath}`
         )
       );
     }

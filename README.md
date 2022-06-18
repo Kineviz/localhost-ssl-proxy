@@ -47,7 +47,10 @@ Start your web server on the target port (`9443` in the example) and navigate to
 
 `--staticPath`         Static web path(Default /staticPath)
 
-`--staticDir`          Static files path
+`--staticDir`          Static files path (e.g.  /app/static, Only support one of staticDir and staticServer)
+
+`--staticServer`       Static files staticServer (e.g. http://localhost:3000, Only support one of staticDir and staticServer)   
+
  
 ### Advanced
 
@@ -129,6 +132,32 @@ docker-compose up -d
 
 ```
 then copy the ./docker-compose-demo/nebula_http_cors_request_demo.js to **"chrome develop tool"** > **"console"**, then enter to run.
+
+
+#### GraphXR embed app develop(for iframe)
+
+Use the follow command to create graphXR app (refer https://create-react-app.dev/)
+ 
+```
+npx create-react-app graphxr-app
+```
+
+then install the @kineviz/graphxr-api (refer https://kineviz.github.io/graphxr-api-docs/)
+
+```
+yarn add @kineviz/graphxr-api
+```
+
+#### Handle the GraphXR cors domain issue.
+
+https://GRAPHXR_SERVER  =>  https://localhost:9443    
+http://localhost:3000   =>  https://localhost:9443/graphxr_app   
+
+```
+localhost-ssl-proxy  --port=9000 --staticServer=http://localhost:3000 --staticPath=/graphxr_app
+```
+Now you can use https://localhost:9443/graphxr_app to access the graphxr_app without cors domain issue.
+
 
 ### Thanks
  
