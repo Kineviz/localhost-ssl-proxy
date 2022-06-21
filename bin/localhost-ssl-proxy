@@ -82,12 +82,12 @@ function handleProxyStatic(proxyRes, res, req, staticPath) {
     return proxyRes.pipe(res);
   } else if (/gzip|deflate/gi.test(proxyRes.headers["content-encoding"])) {
     let gunzip = zlib.createUnzip();
-    let bodyTexts = [];
+    let bodyBuffer = [];
     gunzip.on("data", function (data) {
-      bodyTexts.push(data.toString());
+      bodyBuffer.push(data);
     });
     gunzip.on("end", function () {
-      handleResponse(proxyRes, res, req, bodyTexts.join(""), staticPath);
+      handleResponse(proxyRes, res, req, Buffer.concat(bodyBuffer), staticPath);
     });
     proxyRes.pipe(gunzip);
   } else {
@@ -96,17 +96,17 @@ function handleProxyStatic(proxyRes, res, req, staticPath) {
       bodyBuffer.push(chunk);
     });
     proxyRes.on("end", function () {
-      handleResponse(proxyRes, res, req, bodyBuffer.toString(), staticPath);
+      handleResponse(proxyRes, res, req, Buffer.concat(bodyBuffer), staticPath);
     });
   }
 }
-function handleResponse(proxyRes, res, req, bodyText, staticPath) {
+function handleResponse(proxyRes, res, req, bodyBuffer, staticPath) {
   Object.keys(proxyRes.headers).forEach(function (key) {
     res.setHeader(key, proxyRes.headers[key]);
   });
-  // refer https://regexr.com/6o17i
   let staticPathname = staticPath.replace(/\//gi, "");
-
+  let bodyText = bodyBuffer.toString("utf8");
+  // refer https://regexr.com/6o17i
   bodyText = bodyText.replace(
     /(href|src|import|url)[ =:\()]+["'\`]\//gim,
     `$&${staticPathname}/`
@@ -122,34 +122,47 @@ function handleResponse(proxyRes, res, req, bodyText, staticPath) {
   if (/gzip|deflate/gi.test(proxyRes.headers["content-encoding"])) {
     res.setHeader("Content-Encoding", "gzip");
     res.writeHead(proxyRes.statusCode || 200);
-    res.end(zlib.gzipSync(Buffer.from(bodyText)));
+    res.end(zlib.gzipSync(Buffer.from(bodyText, "utf8")));
   } else {
     res.writeHead(proxyRes.statusCode || 200);
-    res.end(Buffer.from(bodyText));
+    res.end(Buffer.from(bodyText, "utf8"));
   }
 }
 
 const config = opts.config || { "localhost-ssl-proxy": opts };
+
 const configItems = Object.keys(config);
 configItems.forEach(function (name, index) {
   const options = config[name] || {};
-  const hostname = getOption(options.hostname || opts.hostname);
-  const port = Number(getOption(options.port || opts.port));
-  const targetPort = Number(getOption(options.targetPort || opts.targetPort));
-  const targetHostname = getOption(options.DNS || opts.DNS || "localhost");
   const getBoolProp = (prop) =>
     getBool(options[prop] !== undefined ? options[prop] : opts[prop]);
+
+  let hostname = getOption(options.hostname || opts.hostname);
+  let port = Number(getOption(options.port || opts.port));
+  let proxySSL = getBoolProp("proxySSL") || port === 443;
+  const targetPort = Number(getOption(options.targetPort || opts.targetPort));
+  const targetHostname = getOption(
+    options.targetHostname || opts.targetHostname || "localhost"
+  );
+  const proxyServer = getOption(options.proxyServer || opts.proxyServer);
+
+  if (proxyServer) {
+    let proxyURL = new URL(proxyServer);
+    hostname = proxyURL.hostname;
+    proxySSL = proxyURL.protocol === "https:" ? true : false;
+    port = proxyURL.port || (proxySSL ? 443 : 80);
+  }
 
   let onlyWS = getBoolProp("onlyWS");
   let useSSL = getBoolProp("useSSL");
   let useCORS = getBoolProp("useCORS");
-  let proxySSL = getBoolProp("proxySSL") || port === 443;
   let staticPath = `/${getOption(options.staticPath || opts.staticPath).replace(
     /^\//gi,
     ""
   )}`;
   let staticDir = getOption(options.staticDir || opts.staticDir);
   let staticServer = getOption(options.staticServer || opts.staticServer);
+  let staticWS = getOption(options.staticWS || opts.staticWS);
 
   if (staticDir && staticPath) {
     let app = express();
@@ -250,6 +263,17 @@ configItems.forEach(function (name, index) {
       // proxyReq.setHeader("Accept-Encoding" ,"*;q=1,gzip=0" );
     });
 
+    const needStaticProxy = (staticDir || staticServer);
+    const staticeProxyConfig =  {
+      target: staticServer
+        ? staticServer
+        : {
+            host: "localhost",
+            port: StaticPort,
+            protocol: "http:",
+          },
+    };
+
     const handleProxyWeb = function (req, res) {
       if (req.method === "OPTIONS") {
         serverOptions.useCORS && enableCors(req, res);
@@ -258,20 +282,16 @@ configItems.forEach(function (name, index) {
         return;
       }
 
-      if (req.url.includes(staticPath) && (staticDir || staticServer)) {
+      if(needStaticProxy && (/hot\-update\.json/).test(req.url)){
+          proxy.web(req, res, staticeProxyConfig);
+      }else if (needStaticProxy && req.url.includes(staticPath) ) {
         req.url = req.url.replace(staticPath, "");
         req.staticPath = staticPath;
         delete req.headers["etag"];
 
-        proxy.web(req, res, {
-          target: staticServer
-            ? staticServer
-            : {
-                host: "localhost",
-                port: StaticPort,
-                protocol: "http:",
-              },
-          selfHandleResponse: true,
+        proxy.web(req, res,  {
+          ...staticeProxyConfig,  
+           selfHandleResponse: true,
         });
       } else {
         proxy.web(req, res);
@@ -289,7 +309,11 @@ configItems.forEach(function (name, index) {
     }
 
     proxyServer.on("upgrade", function (req, socket, head) {
-      proxy.ws(req, socket, head);
+      if (needStaticProxy && new RegExp(staticWS).test(req.url)) {
+        proxy.ws(req, socket, head, staticeProxyConfig);
+      } else {
+        proxy.ws(req, socket, head);
+      }
     });
 
     proxyServer.listen(targetPort);
@@ -342,4 +366,8 @@ configItems.forEach(function (name, index) {
   } else {
     createProxyServer(proxyConfig);
   }
+});
+
+process.on("uncaughtException", function (err) {
+  console.error("Not exit:", err.stack);
 });

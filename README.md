@@ -39,9 +39,9 @@ Start your web server on the target port (`9443` in the example) and navigate to
 
 `-c` or `--config`     Use config.json  
 
-`--DNS`                Self-sign SSL DNS (default localhost)
+`--targetHostname`     Self-sign SSL DNS/IP (default localhost)
 
-`--proxySSL`           Proxy host enable SSL (Default false), default is proxy http/ws
+`--proxySSL`           Proxy host enable SSL (Default false, if proxy port is 443 will auto use SSL), default is proxy http/ws
 
 `--useCORS`            Enable CORS (Default true)
 

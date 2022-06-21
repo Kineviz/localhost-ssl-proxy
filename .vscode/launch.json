@@ -12,9 +12,9 @@
                 "<node_internals>/**"
             ],
             "args": [
-                 "-s=false",
+                 "--proxyServer=https://graphxrdev.kineviz.com",
+                 "--staticServer=http://192.168.1.227:3003",
                  "--port=9000",
-                 "--staticServer=http://192.168.1.227:3003"
                  
             ],
             "type": "pwa-node"
