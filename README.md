@@ -50,6 +50,7 @@ Start your web server on the target port (`9443` in the example) and navigate to
 `--staticDir`          Static files path (e.g.  /app/static, Only support one of staticDir and staticServer)
 
 `--staticServer`       Static files staticServer (e.g. http://localhost:3000, Only support one of staticDir and staticServer)   
+`--proxyServer`        ProxyServer (e.g. https://graphxrdev.kineviz.com)
 
  
 ### Advanced
@@ -154,7 +155,7 @@ https://GRAPHXR_SERVER  =>  https://localhost:9443
 http://localhost:3000   =>  https://localhost:9443/graphxr_app   
 
 ```
-localhost-ssl-proxy  --port=9000 --staticServer=http://localhost:3000 --staticPath=/graphxr_app
+localhost-ssl-proxy --proxyServer=https://graphxrdev.kineviz.com --staticServer=http://localhost:3000 --staticPath=/graphxr_app
 ```
 Now you can use https://localhost:9443/graphxr_app to access the graphxr_app without cors domain issue.
 
