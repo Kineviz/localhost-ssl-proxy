@@ -14,6 +14,7 @@
             "args": [
                  "--proxyServer=https://graphxrdev.kineviz.com",
                  "--staticServer=http://192.168.1.227:3003",
+                 "--staticPath=graphxr_app"
                  
             ],
             "type": "pwa-node"
