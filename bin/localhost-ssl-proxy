@@ -282,8 +282,9 @@ configItems.forEach(function (name, index) {
         return;
       }
 
-      if(needStaticProxy && (/hot\-update\.json/).test(req.url)){
-          proxy.web(req, res, staticeProxyConfig);
+      if(needStaticProxy && (/\.hot\-update\./ig).test(req.url)){
+           //ignore at first
+           //proxy.web(req, res, staticeProxyConfig);
       }else if (needStaticProxy && req.url.includes(staticPath) ) {
         req.url = req.url.replace(staticPath, "");
         req.staticPath = staticPath;
