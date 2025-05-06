@@ -234,33 +234,19 @@ configItems.forEach(function (name, index) {
         )
       );
     });
-    //set header for CORS
-    let proxyCookiesMap = {};
+    // Set header for CORS and handle cookies properly
     proxy.on("proxyRes", function (proxyRes, req, res) {
-      serverOptions.useCORS && enableCors(req, res);
-      const sc = proxyRes.headers["set-cookie"] || [];
-      const cookiesRaw = !serverOptions.sessionName
-        ? sc
-        : sc.filter((s) => s.startsWith(serverOptions.sessionName));
-      if (cookiesRaw.length > 0) {
-        cookiesRaw
-          .filter((s) => typeof s === "string")
-          .forEach((cookie) => {
-            const cookieName = cookie.split(";")[0].split("=")[0];
-            proxyCookiesMap[cookieName] = cookie;
-          });
-      }
-
+      serverOptions.useCORS && enableCors(req, res); 
       if (req.staticPath === staticPath) {
-        handleProxyStatic(proxyRes, res, req, staticPath);
+      handleProxyStatic(proxyRes, res, req, staticPath);
       }
     });
 
     proxy.on("proxyReq", function (proxyReq, req, res, options) {
-      if (Object.keys(proxyCookiesMap).length > 0) {
-        proxyReq.setHeader("Cookie", Object.values(proxyCookiesMap));
+      // Use browser's cookies for the proxied request
+      if (req.headers.cookie) {
+        proxyReq.setHeader("Cookie", req.headers.cookie);
       }
-      // proxyReq.setHeader("Accept-Encoding" ,"*;q=1,gzip=0" );
     });
 
     const needStaticProxy = (staticDir || staticServer);
