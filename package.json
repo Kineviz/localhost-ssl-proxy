@@ -1,6 +1,6 @@
 {
   "name": "localhost-ssl-proxy",
-  "version": "1.0.11",
+  "version": "1.1.0",
   "author": "Sean Li <sean@kineviz.com>",
   "description": "Let proxy to https localhost simply.",
   "repository": {
@@ -18,11 +18,11 @@
   ],
   "scripts": {
     "dev": "nodemon --exec \"node ./bin/localhost-ssl-proxy -p 8080 --useCORS false \" --watch ./bin/localhost-ssl-proxy --watch ./lib  ",
-    "test": "yarn unlink localhost-ssl-proxy || yarn link && yarn link && localhost-ssl-proxy -p 8008",
+    "test": "yarn unlink localhost-ssl-proxy || yarn link && yarn link && localhost-ssl-proxy -p 8080",
     "release": "npm  publish --registry=https://registry.npmjs.org",
     "docker_build": "docker build -t kineviz/localhost-ssl-proxy:latest ./  --no-cache",
     "docker_push": "docker push kineviz/localhost-ssl-proxy:latest",
-    "docker_test": "cd ./docker-compose-for-nebula-graphdb && docker-compose up -d"
+    "docker_test": "(docker rm -f localhost-ssl-proxy || true) && docker run -d -it --name localhost-ssl-proxy  -p 9443:9443 kineviz/localhost-ssl-proxy:latest -p 8080 -h host.docker.internal  "
   },
   "resolutions": {
     "minimist": "^1.2.6",

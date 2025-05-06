@@ -94,7 +94,7 @@ localhost-ssl-proxy --config config.json
 
 ### Docker
 
-> Use docker must use hostname (IP or docker.internal.host )
+> Use docker must use hostname (IP or host.docker.internal )
 
 ```
 docker run -d -it \
@@ -102,7 +102,7 @@ docker run -d -it \
 --name localhost-ssl-proxy \
 -p 9443:9443 \
 kineviz/localhost-ssl-proxy:latest \
--p 8008 -h docker.internal.host  
+-p 8008 -h host.docker.internal  
 ```
 
 ### Examples
